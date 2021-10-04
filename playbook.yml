@@ -1,0 +1,70 @@
+---
+- hosts: '*'
+  tasks:
+      # add check for helm before downloading
+    - block:
+        - name: unarchive helm tarball from remote source
+          unarchive:
+            src: https://get.helm.sh/helm-v3.7.0-linux-amd64.tar.gz        
+            dest: /tmp/
+            remote_src: yes
+          register: helm_download_result
+
+        - name: move helm binary to /usr/local/bin/
+          copy:
+            src: /tmp/linux-amd64/helm
+            dest: /usr/local/bin/helm
+            mode: '0755'
+            remote_src: yes
+
+      always:
+        - name: cleanup
+          file:
+            path: /tmp/linux_amd64
+            state: absent
+
+
+      # add check for rke2 before downloading
+    - name: unarchive rke2 tarball from remote source
+      unarchive:
+        src: https://github.com/rancher/rke2/releases/download/v1.21.5%2Brke2r1/rke2.linux-amd64.tar.gz
+        dest: /usr/local
+        remote_src: yes
+
+    - name: create /var/lib/rancher/rke2/agent/images
+      file:
+        path: /var/lib/rancher/rke2/agent/images
+        state: directory
+
+    - name: get rke2.core.images
+      get_url:
+        url: https://github.com/rancher/rke2/releases/download/v1.21.5%2Brke2r1/rke2-images-core.linux-amd64.tar.gz
+        dest: /var/lib/rancher/rke2/agent/images/rke2-images-core.linux-amd64.tar.gz
+
+    - name: /etc/rancher dir
+      file:
+        path: /etc/rancher
+        state: directory 
+    - name: /etc/rancher/rke2 dir
+      file:
+        path: /etc/rancher/rke2
+        state: directory 
+    - name: private registry
+      template:
+        src: registry.j2
+        dest: /etc/rancher/rke2/reigstry.yaml
+
+- hosts: rke2server
+  tasks:
+    - name: install rke2 systemd
+      copy:
+        src: /usr/local/lib/systemd/system/rke2-server.service
+        dest: /etc/systemd/system
+        remote_src: True
+- hosts: rke2agent
+  tasks:
+    - name: install rke2 systemd
+      copy:
+        src: /usr/local/lib/systemd/system/rke2-agent.service
+        dest: /etc/systemd/system
+        remote_src: True
